@@ -34,7 +34,35 @@ app.use(express.json());
 
 //     }
 // })
-app.use('/api', authMiddleware);
+
+//
+
+
+
+app.use('/api', authMiddleware); // It checks is he authenticated
+
+app.get("/api/tasks", async (req, res) => {
+    try {
+        const userId = req.userId;
+
+        const { data, error } = await supabase
+            .from("tasks").select("*")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            console.error("Supabase error:", error);
+            return res.status(500).json({ error: "Failed to fetch tasks" });
+        }
+
+        console.log("Fetched tasks:", data);
+        res.status(200).json(data);
+
+    } catch (error) {
+
+    }
+})
+
 app.post("/api/tasks", async (req, res) => {
     // Destructure all the fields from the request body
     const {
@@ -75,6 +103,77 @@ app.post("/api/tasks", async (req, res) => {
         console.log("DB returned data :", data);
 
         res.status(201).json(data[0]);
+    } catch (err) {
+        console.error("Server error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// PUT endpoint to update a specific task
+app.put("/api/tasks/:id", async (req, res) => {
+    const taskId = req.params.id;
+    const userId = req.userId;
+    const updateData = req.body;
+
+    try {
+        // First check if the task belongs to the user
+        const { data: existingTask, error: fetchError } = await supabase
+            .from("tasks")
+            .select("user_id")
+            .eq("id", taskId)
+            .single();
+
+        if (fetchError || !existingTask) {
+            return res.status(404).json({ error: "Task not found" });
+        }
+
+        if (existingTask.user_id !== userId) {
+            return res.status(403).json({ error: "Unauthorized to update this task" });
+        }
+
+        // Update the task
+        const { data, error } = await supabase
+            .from("tasks")
+            .update(updateData)
+            .eq("id", taskId)
+            .eq("user_id", userId) // Double check user ownership
+            .select();
+
+        if (error) {
+            console.error("Supabase error:", error);
+            return res.status(500).json({ error: "Failed to update task" });
+        }
+
+        res.status(200).json(data[0]);
+    } catch (err) {
+        console.error("Server error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// DELETE endpoint to delete a specific task
+app.delete("/api/tasks/:id", async (req, res) => {
+    const taskId = req.params.id;
+    const userId = req.userId;
+
+    try {
+        const { data, error } = await supabase
+            .from("tasks")
+            .delete()
+            .eq("id", taskId)
+            .eq("user_id", userId) // Only delete if it belongs to the user
+            .select();
+
+        if (error) {
+            console.error("Supabase error:", error);
+            return res.status(500).json({ error: "Failed to delete task" });
+        }
+
+        if (!data || data.length === 0) {
+            return res.status(404).json({ error: "Task not found or unauthorized" });
+        }
+
+        res.status(200).json({ message: "Task deleted successfully" });
     } catch (err) {
         console.error("Server error:", err);
         res.status(500).json({ error: "Server error" });
