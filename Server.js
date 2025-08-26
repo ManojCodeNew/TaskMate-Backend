@@ -1,85 +1,73 @@
 //Library import section
-import express from "express"
-import cors from "cors"
-import dotenv from "dotenv"
-import { supabase } from "./supabaseClient.js"
-import authMiddleware from "./Middlewares/AuthMiddleware.js"
-// import { supabase } from "@supabase/supabase-js"
-// import authMiddle
-// import pkg from "pg"
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { supabase } from "./supabaseClient.js";
+import authMiddleware from "./Middlewares/AuthMiddleware.js";
 
 dotenv.config();
-// const { Pool } = pkg;
 
 const app = express();
 
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/api', authMiddleware);
 
-// // PostgreSQL pool connection
-// const pool = new Pool({
-//     connectionString: process.env.DATABASE_URL,
-//     ssl: { rejectUnauthorized: false },
-// })
+// Error handler middleware
+const errorHandler = (err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
+};
 
-// app.get('/notes', async (req, res) => {
-//     try {
-//         const result = await pool.query("SELECT * FROM notes ORDER BY id ASC");
-//         console.log(result);
-
-//         res.json(result.rows);
-//     } catch (error) {
-//         console.log(err);
-//         res.status(500).json({ error: "Database error" });
-
-//     }
-// })
-
-//
-
-
-
-app.use('/api', authMiddleware); // It checks is he authenticated
-
-app.get("/api/tasks", async (req, res) => {
+// GET tasks endpoint
+app.get("/api/tasks", async (req, res, next) => {
     try {
         const userId = req.userId;
+        console.log(`Fetching tasks for user: ${userId}`);
 
         const { data, error } = await supabase
-            .from("tasks").select("*")
+            .from("tasks")
+            .select("*")
             .eq("user_id", userId)
             .order("created_at", { ascending: false });
 
         if (error) {
             console.error("Supabase error:", error);
-            return res.status(500).json({ error: "Failed to fetch tasks" });
+            throw new Error("Failed to fetch tasks");
         }
 
-        console.log("Fetched tasks:", data);
+        console.log(`Successfully fetched ${data.length} tasks`);
         res.status(200).json(data);
-
     } catch (error) {
-
+        next(error);
     }
-})
+});
 
-app.post("/api/tasks", async (req, res) => {
-    // Destructure all the fields from the request body
-    const {
-        title,
-        description,
-        priority,
-        estimatedDuration,
-        recurrence,
-        reminder,
-        due_date,
-        tags,
-    } = req.body;
-    console.log(req.body);
-
+// POST task endpoint
+app.post("/api/tasks", async (req, res, next) => {
     try {
-        const userId = req.userId; // Get the user ID from the authentication middleware
-        console.log("Using Auth Middleware provided userId :", userId);
+        const {
+            title,
+            description,
+            priority,
+            estimatedDuration,
+            start_date,
+            due_date,
+            tags,
+        } = req.body;
+
+        console.log('Request body:', req.body);
+
+        if (!title) {
+            return res.status(400).json({ error: "Title is required" });
+        }
+
+        const userId = req.userId;
+        console.log(`Creating task for user: ${userId}`);
 
         const { data, error } = await supabase
             .from("tasks")
@@ -88,35 +76,37 @@ app.post("/api/tasks", async (req, res) => {
                 description,
                 priority,
                 estimatedDuration,
-                recurrence,
-                reminder,
+                start_date,
                 due_date,
                 tags,
-                user_id: userId // This links the task to the authenticated user
+                user_id: userId,
+                created_at: new Date().toISOString(),
+                status: 'Pending'
             })
             .select();
 
         if (error) {
             console.error("Supabase error:", error);
-            return res.status(500).json({ error: "Failed to create task" });
+            throw new Error("Failed to create task");
         }
-        console.log("DB returned data :", data);
 
+        console.log(`Task created successfully with ID: ${data[0].id}`);
         res.status(201).json(data[0]);
-    } catch (err) {
-        console.error("Server error:", err);
-        res.status(500).json({ error: "Server error" });
+    } catch (error) {
+        next(error);
     }
 });
 
-// PUT endpoint to update a specific task
-app.put("/api/tasks/:id", async (req, res) => {
-    const taskId = req.params.id;
-    const userId = req.userId;
-    const updateData = req.body;
-
+// PUT task endpoint
+app.put("/api/tasks/:id", async (req, res, next) => {
     try {
-        // First check if the task belongs to the user
+        const taskId = req.params.id;
+        const userId = req.userId;
+        const updateData = req.body;
+
+        console.log(`Updating task ${taskId} for user ${userId}`);
+
+        // Validate ownership
         const { data: existingTask, error: fetchError } = await supabase
             .from("tasks")
             .select("user_id")
@@ -131,56 +121,83 @@ app.put("/api/tasks/:id", async (req, res) => {
             return res.status(403).json({ error: "Unauthorized to update this task" });
         }
 
-        // Update the task
+        // Update task
         const { data, error } = await supabase
             .from("tasks")
-            .update(updateData)
+            .update({
+                ...updateData,
+                updated_at: new Date().toISOString()
+            })
             .eq("id", taskId)
-            .eq("user_id", userId) // Double check user ownership
+            .eq("user_id", userId)
             .select();
 
         if (error) {
             console.error("Supabase error:", error);
-            return res.status(500).json({ error: "Failed to update task" });
+            throw new Error("Failed to update task");
         }
 
+        console.log(`Task ${taskId} updated successfully`);
         res.status(200).json(data[0]);
-    } catch (err) {
-        console.error("Server error:", err);
-        res.status(500).json({ error: "Server error" });
+    } catch (error) {
+        next(error);
     }
 });
 
-// DELETE endpoint to delete a specific task
-app.delete("/api/tasks/:id", async (req, res) => {
-    const taskId = req.params.id;
-    const userId = req.userId;
-
+// DELETE task endpoint
+app.delete("/api/tasks/:id", async (req, res, next) => {
     try {
-        const { data, error } = await supabase
+        const taskId = req.params.id;
+        const userId = req.userId;
+
+        console.log(`Deleting task ${taskId} for user ${userId}`);
+
+        // First check if task exists and belongs to user
+        const { data: existingTask, error: fetchError } = await supabase
+            .from("tasks")
+            .select("user_id")
+            .eq("id", taskId)
+            .single();
+
+        if (fetchError || !existingTask) {
+            return res.status(404).json({ error: "Task not found" });
+        }
+
+        if (existingTask.user_id !== userId) {
+            return res.status(403).json({ error: "Unauthorized to delete this task" });
+        }
+
+        // Delete task
+        const { error } = await supabase
             .from("tasks")
             .delete()
             .eq("id", taskId)
-            .eq("user_id", userId) // Only delete if it belongs to the user
-            .select();
+            .eq("user_id", userId);
 
         if (error) {
             console.error("Supabase error:", error);
-            return res.status(500).json({ error: "Failed to delete task" });
+            throw new Error("Failed to delete task");
         }
 
-        if (!data || data.length === 0) {
-            return res.status(404).json({ error: "Task not found or unauthorized" });
-        }
-
+        console.log(`Task ${taskId} deleted successfully`);
         res.status(200).json({ message: "Task deleted successfully" });
-    } catch (err) {
-        console.error("Server error:", err);
-        res.status(500).json({ error: "Server error" });
+    } catch (error) {
+        next(error);
     }
 });
 
+// Use error handler
+app.use(errorHandler);
 
-app.listen(process.env.PORT || 3000, () => {
-    console.log(`Server running on port ${process.env.PORT || 3000}`);
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`API URL: http://localhost:${PORT}/api`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received. Shutting down gracefully...');
+    process.exit(0);
 });
