@@ -109,7 +109,7 @@ app.put("/api/tasks/:id", async (req, res, next) => {
         // Validate ownership
         const { data: existingTask, error: fetchError } = await supabase
             .from("tasks")
-            .select("user_id")
+            .select("*")
             .eq("id", taskId)
             .single();
 
@@ -126,6 +126,9 @@ app.put("/api/tasks/:id", async (req, res, next) => {
             .from("tasks")
             .update({
                 ...updateData,
+                time_spent: updateData.time_spent || existingTask.time_spent,
+                last_session_time: updateData.last_session_time || existingTask.last_session_time,
+                last_paused: updateData.last_paused || existingTask.last_paused,
                 updated_at: new Date().toISOString()
             })
             .eq("id", taskId)
