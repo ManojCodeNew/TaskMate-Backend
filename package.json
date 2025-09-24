@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@clerk/backend": "^2.12.1",
     "@clerk/clerk-sdk-node": "^4.13.23",
     "@supabase/supabase-js": "^2.54.0",
     "cors": "^2.8.5",
