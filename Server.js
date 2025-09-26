@@ -5,6 +5,7 @@ import authMiddleware from "./middlewares/authMiddleware.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import noteRoutes from "./routes/noteRoutes.js";
 import drawingRoutes from "./routes/drawingRoutes.js";
+import aiHistoryRoutes from "./routes/aiHistoryRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -19,6 +20,7 @@ app.use("/api", authMiddleware);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/drawings", drawingRoutes);
+app.use("/api/ai-history", aiHistoryRoutes);
 
 // Global Error handler
 app.use((err, req, res, next) => {

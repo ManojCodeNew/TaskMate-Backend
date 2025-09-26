@@ -2,12 +2,12 @@ import { createDrawing, getDrawingsByUserId, getDrawingById, updateDrawing, dele
 
 export async function saveDrawing(req, res, next) {
     try {
-        const { title, data } = req.body;
-        if (!title || !data) {
-            return res.status(400).json({ error: "Title and data are required" });
+        const { title, drawingData, canvasWidth, canvasHeight } = req.body;
+        if (!title || !drawingData) {
+            return res.status(400).json({ error: "Title and drawing data are required" });
         }
 
-        const drawing = await createDrawing(req.userId, title, data);
+        const drawing = await createDrawing(req.userId, title, drawingData, canvasWidth || 800, canvasHeight || 600);
         res.status(201).json(drawing);
     } catch (err) {
         next(err);
@@ -37,8 +37,8 @@ export async function getDrawing(req, res, next) {
 
 export async function updateDrawingData(req, res, next) {
     try {
-        const { title, data } = req.body;
-        const drawing = await updateDrawing(req.params.id, req.userId, title, data);
+        const { title, drawingData, canvasWidth, canvasHeight } = req.body;
+        const drawing = await updateDrawing(req.params.id, req.userId, title, drawingData, canvasWidth, canvasHeight);
         if (!drawing) {
             return res.status(404).json({ error: "Drawing not found" });
         }

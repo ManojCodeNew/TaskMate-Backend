@@ -18,7 +18,7 @@ export async function createTask(userId, taskData) {
 }
 
 export async function updateTask(taskId, userId, updates) {
-    const { title, description, priority, estimatedDuration, start_date, due_date, tags, status } = updates;
+    const { title, description, priority, estimatedDuration, start_date, due_date, tags, status, time_spent, last_session_time, last_paused, pomodoros_completed, completed_at } = updates;
     const query = `
     UPDATE tasks SET 
       title = COALESCE($1, title),
@@ -29,10 +29,15 @@ export async function updateTask(taskId, userId, updates) {
       due_date = COALESCE($6, due_date),
       tags = COALESCE($7, tags),
       status = COALESCE($8, status),
+      time_spent = COALESCE($9, time_spent),
+      last_session_time = COALESCE($10, last_session_time),
+      last_paused = COALESCE($11, last_paused),
+      pomodoros_completed = COALESCE($12, pomodoros_completed),
+      completed_at = COALESCE($13, completed_at),
       updated_at = NOW()
-    WHERE id = $9 AND user_id = $10
+    WHERE id = $14 AND user_id = $15
     RETURNING *`;
-    const values = [title, description, priority, estimatedDuration, start_date, due_date, tags ? JSON.stringify(tags) : null, status, taskId, userId];
+    const values = [title, description, priority, estimatedDuration, start_date, due_date, tags ? JSON.stringify(tags) : null, status, time_spent, last_session_time, last_paused, pomodoros_completed, completed_at, taskId, userId];
     const { rows } = await pool.query(query, values);
     return rows[0];
 }
